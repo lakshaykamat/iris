@@ -5,13 +5,13 @@ at what she remembers, thinks, and plans without writing SQL.
 
 Usage (from the project root):
 
-    python -m tools.memory_cli                 # a one-screen summary of everything
-    python -m tools.memory_cli chat            # recent conversation (short-term)
-    python -m tools.memory_cli facts           # durable truths she knows
-    python -m tools.memory_cli memories         # episodic events + reflections
-    python -m tools.memory_cli schedule        # planned proactive check-ins
-    python -m tools.memory_cli decisions       # why she sent / stayed silent
-    python -m tools.memory_cli search aarav    # any row whose text matches
+    python -m dev.memory_cli                 # a one-screen summary of everything
+    python -m dev.memory_cli chat            # recent conversation (short-term)
+    python -m dev.memory_cli facts           # durable truths she knows
+    python -m dev.memory_cli memories         # episodic events + reflections
+    python -m dev.memory_cli schedule        # planned proactive check-ins
+    python -m dev.memory_cli decisions       # why she sent / stayed silent
+    python -m dev.memory_cli search aarav    # any row whose text matches
 
 Handy flags:  -n/--limit N (rows to show),  --db PATH (point at another db).
 """

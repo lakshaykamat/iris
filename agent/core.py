@@ -127,6 +127,13 @@ class Agent:
                     cached,
                     response.usage.completion_tokens,
                 )
+                self.store.log_token_usage(
+                    model=MODEL,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    cached_tokens=cached,
+                    completion_tokens=response.usage.completion_tokens,
+                    trigger="proactive" if extra_instruction else "reply",
+                )
             message = response.choices[0].message
             if not message.tool_calls:
                 return message.content or ""

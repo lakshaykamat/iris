@@ -39,7 +39,7 @@ Both are optional; without them she stays text-only.
 **Stickers** — collect `file_id`s once:
 
 ```bash
-python tools/collect_stickers.py
+python dev/collect_stickers.py
 ```
 
 In the chat, send a mood word (`love`, `laugh`, `sulk`, `miss_you`, `sleepy`, …),
@@ -75,7 +75,7 @@ sqlite3 data/agent.db 'SELECT text, importance FROM memories ORDER BY ts DESC LI
 sqlite3 data/agent.db 'SELECT action, reason, ts FROM decisions ORDER BY id DESC LIMIT 10;'
 
 # Or use the memory CLI
-python tools/memory_cli.py
+python -m dev.memory_cli
 ```
 
 ---

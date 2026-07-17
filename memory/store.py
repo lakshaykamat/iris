@@ -47,15 +47,27 @@ CREATE TABLE IF NOT EXISTS decisions (
     action TEXT NOT NULL,
     reason TEXT
 );
+
+CREATE TABLE IF NOT EXISTS token_usage (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts                TEXT NOT NULL DEFAULT (datetime('now')),
+    model             TEXT NOT NULL,
+    prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    cached_tokens     INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    trigger           TEXT
+);
 """
 
 
 class Store:
     """Thin wrapper over the SQLite connection holding the agent's state."""
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, check_same_thread: bool = True):
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        # The dashboard opens a read-only Store from Flask's worker threads, so it
+        # passes check_same_thread=False; the bot keeps the safe default.
+        self.conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         self._migrate()
@@ -98,7 +110,8 @@ class Store:
     def active_facts(self) -> list[sqlite3.Row]:
         """Return facts that have not been superseded, oldest first."""
         return self.conn.execute(
-            "SELECT id, text FROM facts WHERE superseded_by IS NULL ORDER BY id"
+            "SELECT id, text, source, created_at FROM facts "
+            "WHERE superseded_by IS NULL ORDER BY id"
         ).fetchall()
 
     def supersede_fact(self, old_id: int, text: str, source: str | None = None) -> int:
@@ -197,6 +210,97 @@ class Store:
             "INSERT INTO decisions (action, reason) VALUES (?, ?)", (action, reason)
         )
         self.conn.commit()
+
+    # --- Token usage: track every OpenAI call for cost visibility -----------
+
+    def log_token_usage(
+        self,
+        model: str,
+        prompt_tokens: int,
+        cached_tokens: int,
+        completion_tokens: int,
+        trigger: str | None = None,
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO token_usage "
+            "(model, prompt_tokens, cached_tokens, completion_tokens, trigger) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (model, prompt_tokens, cached_tokens, completion_tokens, trigger),
+        )
+        self.conn.commit()
+
+    def token_usage_recent(self, limit: int = 60) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT ts, model, prompt_tokens, cached_tokens, completion_tokens, trigger "
+            "FROM token_usage ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    def token_usage_totals(self) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT SUM(prompt_tokens) AS total_prompt, "
+            "SUM(cached_tokens) AS total_cached, "
+            "SUM(completion_tokens) AS total_completion, "
+            "COUNT(*) AS total_calls "
+            "FROM token_usage"
+        ).fetchone()
+
+    def token_usage_by_model(self) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT model, "
+            "SUM(prompt_tokens) AS total_prompt, "
+            "SUM(cached_tokens) AS total_cached, "
+            "SUM(completion_tokens) AS total_completion, "
+            "COUNT(*) AS calls "
+            "FROM token_usage GROUP BY model ORDER BY calls DESC"
+        ).fetchall()
+
+    # --- Dashboard reads: counts and recent rows for the read-only UI ------
+
+    def message_count(self) -> int:
+        return self.conn.execute("SELECT COUNT(*) AS c FROM messages").fetchone()["c"]
+
+    def memory_count(self) -> int:
+        return self.conn.execute("SELECT COUNT(*) AS c FROM memories").fetchone()["c"]
+
+    def active_fact_count(self) -> int:
+        return self.conn.execute(
+            "SELECT COUNT(*) AS c FROM facts WHERE superseded_by IS NULL"
+        ).fetchone()["c"]
+
+    def recent_reflections(self, limit: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT text FROM memories WHERE kind = 'reflection' ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    def messages_for_display(self, limit: int) -> list[sqlite3.Row]:
+        """Last `limit` messages in chronological order, with kind and timestamp."""
+        rows = self.conn.execute(
+            "SELECT role, content, kind, ts FROM messages ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return list(reversed(rows))
+
+    def recent_memories(self, limit: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT text, kind, importance, ts, last_recalled "
+            "FROM memories ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    def recent_decisions(self, limit: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT ts, action, reason FROM decisions ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+
+    def recent_schedule(self, limit: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT fire_at, reason, status, pinned FROM schedule "
+            "ORDER BY fire_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
 
     def last_user_message_ts(self) -> str | None:
         row = self.conn.execute(

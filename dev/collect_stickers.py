@@ -7,7 +7,7 @@ stickers that fit it. Each sticker is filed under the current mood and saved
 immediately. Switch mood by sending another mood word. Stop with Ctrl+C —
 media/stickers.json is then ready for send_sticker.
 
-    python tools/collect_stickers.py
+    python dev/collect_stickers.py
 """
 
 import json

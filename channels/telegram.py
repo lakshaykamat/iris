@@ -16,7 +16,6 @@ from agent.core import Agent
 from agent.tools.media import MediaItem, search_gif
 from config import DEBOUNCE_SECONDS, OWNER_CHAT_ID, TELEGRAM_TOKEN
 from memory.store import Store
-from scheduler import run_reflection_loop
 
 logger = logging.getLogger(__name__)
 
@@ -127,10 +126,12 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Unexpected error while handling update", exc_info=error)
 
 
-def build_app(store: Store) -> Application:
-    app = Application.builder().token(TELEGRAM_TOKEN).post_init(_start_autonomy).build()
+def build_app(store: Store, lock: asyncio.Lock, post_init=None) -> Application:
+    builder = Application.builder().token(TELEGRAM_TOKEN)
+    if post_init is not None:
+        builder = builder.post_init(post_init)
+    app = builder.build()
     agent = Agent(store)
-    lock = asyncio.Lock()
 
     async def handle_turn(chat_id: int, text: str) -> None:
         logger.info("Turn start: %d chars of debounced input", len(text))
@@ -157,11 +158,3 @@ def build_app(store: Store) -> Application:
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
     app.add_error_handler(on_error)
     return app
-
-
-
-async def _start_autonomy(app: Application) -> None:
-    store = app.bot_data["store"]
-    lock = app.bot_data["lock"]
-    app.create_task(run_reflection_loop(store, lock))
-    logger.info("Nightly reflection started (proactive messaging disabled)")
