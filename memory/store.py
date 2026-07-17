@@ -58,7 +58,17 @@ class Store:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        try:
+            self.conn.execute(
+                "ALTER TABLE schedule ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     def save_message(self, role: str, content: str, kind: str = "text") -> None:
         self.conn.execute(
@@ -153,9 +163,18 @@ class Store:
         self.conn.commit()
         return cursor.lastrowid
 
+    def add_reminder(self, fire_at: str, reason: str) -> int:
+        """Like add_checkin but pinned=1 — the gate and presence checks are skipped."""
+        cursor = self.conn.execute(
+            "INSERT INTO schedule (fire_at, reason, pinned) VALUES (?, ?, 1)",
+            (fire_at, reason),
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
     def next_pending_checkin(self) -> sqlite3.Row | None:
         return self.conn.execute(
-            "SELECT id, fire_at, reason FROM schedule "
+            "SELECT id, fire_at, reason, pinned FROM schedule "
             "WHERE status = 'pending' ORDER BY fire_at LIMIT 1"
         ).fetchone()
 

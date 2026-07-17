@@ -17,6 +17,7 @@ from memory.store import TS_FORMAT
 from agent.tools.base import ToolRegistry
 from agent.tools.media import MediaItem, Outbox, load_stickers, register_media_tools
 from agent.tools.remember import register_memory_tools
+from agent.tools.remind import register_remind_tool
 from agent.tools.schedule import register_schedule_tool
 from config import HISTORY_WINDOW, MODEL, OPENAI_API_KEY
 from memory.retrieval import build_memory_context
@@ -54,6 +55,7 @@ class Agent:
         self.tools = ToolRegistry()
         register_memory_tools(self.tools, store)
         register_schedule_tool(self.tools, store)
+        register_remind_tool(self.tools, store)
         register_media_tools(self.tools, self.outbox, load_stickers())
 
     def drain_media(self) -> list[MediaItem]:

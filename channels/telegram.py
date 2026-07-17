@@ -53,8 +53,15 @@ class Debouncer:
         await self.on_flush(chat_id, text)
 
 
+MAX_BUBBLES = 3
+
+
 def split_bubbles(text: str) -> list[str]:
-    return [line.strip() for line in text.splitlines() if line.strip()]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) <= MAX_BUBBLES:
+        return lines
+    # Merge overflow into the last bubble so we never spam more than MAX_BUBBLES messages.
+    return lines[: MAX_BUBBLES - 1] + [" ".join(lines[MAX_BUBBLES - 1 :])]
 
 
 def typing_seconds(text: str) -> float:

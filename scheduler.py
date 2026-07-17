@@ -102,15 +102,16 @@ class ReachOutGate:
 async def handle_checkin(store: Store, agent: Agent, gate: ReachOutGate, send, checkin) -> None:
     """Run one due check-in end to end: presence, gate, send-or-stay-silent, log."""
     reason = checkin["reason"]
+    pinned = bool(checkin["pinned"])
 
-    if _user_active(store):
+    if not pinned and _user_active(store):
         deferred_to = _format(_now() + timedelta(minutes=PRESENCE_DEFER_MINUTES))
         store.reschedule_checkin(checkin["id"], deferred_to)
         store.log_decision("deferred", f"user active; {reason}")
         logger.info("Check-in deferred, user just talked: %s", reason)
         return
 
-    if not await gate.should_reach_out(store, reason):
+    if not pinned and not await gate.should_reach_out(store, reason):
         store.mark_checkin_done(checkin["id"])
         store.log_decision("silent", f"gate declined; {reason}")
         logger.info("Check-in skipped by gate: %s", reason)
@@ -122,7 +123,7 @@ async def handle_checkin(store: Store, agent: Agent, gate: ReachOutGate, send, c
     if text:
         await send(text, media)
         store.log_decision("sent", reason)
-        logger.info("Reached out: %s", reason)
+        logger.info("%s: %s", "Reminder sent" if pinned else "Reached out", reason)
     else:
         store.log_decision("silent", f"chose not to; {reason}")
         logger.info("Chose silence: %s", reason)
