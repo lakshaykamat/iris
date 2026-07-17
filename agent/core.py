@@ -25,11 +25,10 @@ from memory.store import Store
 
 logger = logging.getLogger(__name__)
 
-# gpt-5* are reasoning models: hidden reasoning is billed against this budget
-# before any reply or tool call. Reasoning alone can run ~800 tokens, so a tight
-# cap starves the visible answer to empty. Leave comfortable headroom.
-MAX_TOKENS = 2048
-MAX_TOOL_ROUNDS = 8  # safety cap so a tool loop can't spin forever
+# The persona caps output at 3 short Hinglish bubbles (~150 tokens real output).
+# 512 gives comfortable headroom without paying for tokens that will never be used.
+MAX_TOKENS = 512
+MAX_TOOL_ROUNDS = 4  # safety cap so a tool loop can't spin forever
 SILENT = "[silent]"
 
 # A stable key so every turn routes to the same prompt cache. The persona and

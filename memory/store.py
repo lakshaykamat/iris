@@ -107,11 +107,12 @@ class Store:
         self.conn.commit()
         return cursor.lastrowid
 
-    def active_facts(self) -> list[sqlite3.Row]:
-        """Return facts that have not been superseded, oldest first."""
+    def active_facts(self, limit: int = 20) -> list[sqlite3.Row]:
+        """Return the most recently updated active facts, capped to avoid prompt bloat."""
         return self.conn.execute(
             "SELECT id, text, source, created_at FROM facts "
-            "WHERE superseded_by IS NULL ORDER BY id"
+            "WHERE superseded_by IS NULL ORDER BY updated_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
 
     def supersede_fact(self, old_id: int, text: str, source: str | None = None) -> int:
@@ -134,9 +135,21 @@ class Store:
         self.conn.commit()
         return cursor.lastrowid
 
-    def all_memories(self) -> list[sqlite3.Row]:
+    def candidate_memories(self, limit: int = 50) -> list[sqlite3.Row]:
+        """Return a bounded candidate pool for ranking.
+
+        Keeps: high-importance memories, recently recalled ones, and anything
+        created in the last two weeks — then caps at `limit` rows so Python
+        never scores an unbounded table.
+        """
         return self.conn.execute(
-            "SELECT id, text, kind, importance, ts, last_recalled FROM memories"
+            "SELECT id, text, kind, importance, ts, last_recalled FROM memories "
+            "WHERE importance >= 4 "
+            "   OR last_recalled > datetime('now', '-45 days') "
+            "   OR ts > datetime('now', '-14 days') "
+            "ORDER BY COALESCE(last_recalled, ts) DESC "
+            "LIMIT ?",
+            (limit,),
         ).fetchall()
 
     def bump_recalled(self, ids: list[int]) -> None:

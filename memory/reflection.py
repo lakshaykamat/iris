@@ -11,7 +11,7 @@ import logging
 
 from openai import AsyncOpenAI
 
-from config import MODEL, OPENAI_API_KEY
+from config import GATE_MODEL, OPENAI_API_KEY
 from memory.store import Store
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ async def run_reflection(store: Store, client: AsyncOpenAI | None = None) -> lis
 
     recent = "\n".join(f"- {event['text']}" for event in events)
     response = await client.chat.completions.create(
-        model=MODEL,
+        model=GATE_MODEL,
         max_completion_tokens=MAX_TOKENS,
         messages=[
             {"role": "system", "content": INSTRUCTION},

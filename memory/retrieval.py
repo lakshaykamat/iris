@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 
 from memory.store import TS_FORMAT, Store
 
-RECALL_K = 8
+RECALL_K = 5
+CANDIDATE_POOL = 50  # rows fetched from DB before Python scoring
+MAX_MEMORY_CHARS = 300  # per-memory truncation so one verbose entry can't bloat the prompt
 MAX_IMPORTANCE = 10
 RECENCY_WEIGHT = 1.0
 IMPORTANCE_WEIGHT = 1.0
@@ -55,7 +57,7 @@ def _score(memory, keywords: set[str], now: datetime) -> float:
 
 def top_k(store: Store, trigger: str, k: int = RECALL_K) -> list:
     """Return the k most relevant memories for `trigger`, marking them recalled."""
-    memories = store.all_memories()
+    memories = store.candidate_memories(CANDIDATE_POOL)
     if not memories:
         return []
     now = datetime.now(timezone.utc)
@@ -74,12 +76,15 @@ def build_memory_context(store: Store, trigger: str) -> str:
         return ""
 
     lines: list[str] = []
+    def _clip(text: str) -> str:
+        return text if len(text) <= MAX_MEMORY_CHARS else text[:MAX_MEMORY_CHARS] + "…"
+
     if facts:
         lines.append("Facts you know:")
-        lines += [f"- [#{f['id']}] {f['text']}" for f in facts]
+        lines += [f"- [#{f['id']}] {_clip(f['text'])}" for f in facts]
     if memories:
         if lines:
             lines.append("")
         lines.append("Things you remember:")
-        lines += [f"- {m['text']}" for m in sorted(memories, key=lambda m: m["ts"])]
+        lines += [f"- {_clip(m['text'])}" for m in sorted(memories, key=lambda m: m["ts"])]
     return "\n".join(lines)
