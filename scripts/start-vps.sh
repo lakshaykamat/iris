@@ -78,6 +78,7 @@ docker run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
   --env-file "$ENV_FILE" \
+  -p 5050:5050 \
   -v "${DATA_DIR}:/app/data" \
   "$IMAGE"
 
@@ -102,6 +103,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  iris is running"
 echo "  Image:     $IMAGE"
 echo "  Data:      $DATA_DIR"
+echo "  Dashboard: http://$(curl -sf https://ipinfo.io/ip 2>/dev/null || echo 'localhost'):5050"
 echo "  Logs:      docker logs -f $CONTAINER"
 echo "  Stop:      docker rm -f $CONTAINER"
 echo "  Update:    ./scripts/start-vps.sh  (always pulls latest)"
