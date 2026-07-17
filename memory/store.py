@@ -184,3 +184,16 @@ class Store:
             "SELECT MAX(ts) AS ts FROM messages WHERE role = 'user'"
         ).fetchone()
         return row["ts"] if row else None
+
+    def last_assistant_message_ts(self) -> str | None:
+        row = self.conn.execute(
+            "SELECT MAX(ts) AS ts FROM messages WHERE role = 'assistant'"
+        ).fetchone()
+        return row["ts"] if row else None
+
+    def last_message(self) -> tuple[str, str] | None:
+        """Return (ts, role) of the most recent message, or None."""
+        row = self.conn.execute(
+            "SELECT ts, role FROM messages ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return (row["ts"], row["role"]) if row else None

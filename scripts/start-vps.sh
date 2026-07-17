@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run this script directly on the VPS to set up and start iris end-to-end.
-# Usage: ./start-vps.sh [--update]   (--update pulls the latest image before starting)
+# Always pulls the latest image and restarts the container.
 set -euo pipefail
 
 IMAGE="${IMAGE:-lakshaykamat/iris:latest}"
@@ -13,10 +13,6 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 ok()   { echo -e "${GREEN}[ok]${NC}  $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
 die()  { echo -e "${RED}[fail]${NC} $*" >&2; exit 1; }
-
-# ── flags ────────────────────────────────────────────────────────────────────
-UPDATE=false
-for arg in "$@"; do [[ "$arg" == "--update" ]] && UPDATE=true; done
 
 echo "==> iris setup — $(date)"
 
@@ -65,13 +61,9 @@ ok "data dir: $DATA_DIR"
 echo
 echo "--- Image"
 
-if $UPDATE || ! docker image inspect "$IMAGE" &>/dev/null; then
-  echo "    Pulling $IMAGE ..."
-  docker pull "$IMAGE"
-  ok "pulled $IMAGE"
-else
-  ok "image already present (use --update to pull latest)"
-fi
+echo "    Pulling $IMAGE ..."
+docker pull "$IMAGE"
+ok "pulled $IMAGE"
 
 # ── 5. replace running container ─────────────────────────────────────────────
 echo
@@ -112,5 +104,5 @@ echo "  Image:     $IMAGE"
 echo "  Data:      $DATA_DIR"
 echo "  Logs:      docker logs -f $CONTAINER"
 echo "  Stop:      docker rm -f $CONTAINER"
-echo "  Update:    ./scripts/start-vps.sh --update"
+echo "  Update:    ./scripts/start-vps.sh  (always pulls latest)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

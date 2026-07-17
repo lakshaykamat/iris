@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 
+
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.error import Conflict, NetworkError, TelegramError
@@ -15,7 +16,7 @@ from agent.core import Agent
 from agent.tools.media import MediaItem, search_gif
 from config import DEBOUNCE_SECONDS, OWNER_CHAT_ID, TELEGRAM_TOKEN
 from memory.store import Store
-from scheduler import run_heartbeat, run_reflection_loop
+from scheduler import run_reflection_loop
 
 logger = logging.getLogger(__name__)
 
@@ -151,20 +152,9 @@ def build_app(store: Store) -> Application:
     return app
 
 
+
 async def _start_autonomy(app: Application) -> None:
-    """Launch the heartbeat and reflection loops alongside Telegram polling.
-
-    They share the same lock as the message handler so a proactive turn and a
-    reply can never run at once and corrupt the conversation.
-    """
     store = app.bot_data["store"]
-    agent = app.bot_data["agent"]
     lock = app.bot_data["lock"]
-
-    async def send(text: str, media: list[MediaItem]) -> None:
-        await send_human(app.bot, OWNER_CHAT_ID, text)
-        await deliver_media(app.bot, OWNER_CHAT_ID, media, store)
-
-    app.create_task(run_heartbeat(store, agent, lock, send))
     app.create_task(run_reflection_loop(store, lock))
-    logger.info("Autonomy started: heartbeat + nightly reflection")
+    logger.info("Nightly reflection started (proactive messaging disabled)")

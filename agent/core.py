@@ -8,10 +8,12 @@ remember things she is told (see agent/tools/remember.py).
 
 import json
 import logging
+from datetime import datetime, timezone
 
 from openai import AsyncOpenAI
 
 from agent import prompt
+from memory.store import TS_FORMAT
 from agent.tools.base import ToolRegistry
 from agent.tools.media import MediaItem, Outbox, load_stickers, register_media_tools
 from agent.tools.remember import register_memory_tools
@@ -60,11 +62,22 @@ class Agent:
 
     async def reply(self, user_message: str) -> str:
         """React to a message from the user."""
+        convo_gap_minutes, last_sender = self._convo_gap()
         self.store.save_message("user", user_message)
-        text = await self._run(user_message)
+        text = await self._run(user_message, convo_gap_minutes=convo_gap_minutes, last_sender=last_sender)
         self.store.save_message("assistant", text)
         logger.info("Replied with %d chars", len(text))
         return text
+
+    def _convo_gap(self) -> tuple[int | None, str | None]:
+        """Minutes since the last message + who sent it. Returns (None, None) if no history."""
+        last = self.store.last_message()
+        if last is None:
+            return None, None
+        ts, role = last
+        last_dt = datetime.strptime(ts, TS_FORMAT).replace(tzinfo=timezone.utc)
+        gap = int((datetime.now(timezone.utc) - last_dt).total_seconds() / 60)
+        return gap, role
 
     async def reach_out(self, reason: str) -> str:
         """Run a proactive turn. Returns her message, or "" if she stays silent."""
@@ -76,9 +89,15 @@ class Agent:
         logger.info("Reached out with %d chars", len(text))
         return text
 
-    async def _run(self, trigger: str, extra_instruction: str | None = None) -> str:
+    async def _run(
+        self,
+        trigger: str,
+        extra_instruction: str | None = None,
+        convo_gap_minutes: int | None = None,
+        last_sender: str | None = None,
+    ) -> str:
         self.outbox.drain()  # clear any media left by a prior turn
-        system = prompt.render(build_memory_context(self.store, trigger))
+        system = prompt.render(build_memory_context(self.store, trigger), convo_gap_minutes, last_sender)
         messages: list[dict] = [{"role": "system", "content": system}]
         messages += [
             {"role": row["role"], "content": row["content"]}
