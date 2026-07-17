@@ -6,11 +6,11 @@ import threading
 
 from telegram.ext import Application
 
-from channels.telegram import build_app
+from channels.telegram import build_app, deliver_media, send_human
 from config import DB_PATH, MODEL, OWNER_CHAT_ID
 from logging_setup import configure_logging
 from memory.store import Store
-from scheduler import run_reflection_loop
+from scheduler import run_heartbeat, run_reflection_loop
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +35,16 @@ def main() -> None:
     t.start()
     logger.info("Dashboard → http://localhost:%d", DASHBOARD_PORT)
 
-    async def start_reflection(app: Application) -> None:
-        app.create_task(run_reflection_loop(store, lock))
-        logger.info("Nightly reflection started (proactive messaging disabled)")
+    async def start_background(app: Application) -> None:
+        async def send(text: str, media) -> None:
+            await send_human(app.bot, OWNER_CHAT_ID, text)
+            await deliver_media(app.bot, OWNER_CHAT_ID, media, store)
 
-    app = build_app(store, lock, post_init=start_reflection)
+        app.create_task(run_heartbeat(store, app.bot_data["agent"], lock, send))
+        app.create_task(run_reflection_loop(store, lock))
+        logger.info("Heartbeat and nightly reflection started")
+
+    app = build_app(store, lock, post_init=start_background)
     logger.info(
         "iris starting (model=%s, owner_chat=%s, db=%s)",
         MODEL,

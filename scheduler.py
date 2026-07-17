@@ -135,16 +135,29 @@ async def _maybe_reflect(store: Store) -> None:
         await run_reflection(store)
 
 
+HEARTBEAT_POLL_SECONDS = 60.0
+
+
 async def run_heartbeat(store: Store, agent: Agent, lock: asyncio.Lock, send) -> None:
-    """Sleep until each planned check-in, then let her decide whether to text."""
+    """Sleep until each planned check-in, then let her decide whether to text.
+
+    Polls at most every HEARTBEAT_POLL_SECONDS so newly added reminders are
+    picked up promptly instead of waiting for a sleep started hours earlier.
+    """
     gate = ReachOutGate()
     ensure_upcoming_checkin(store)
     while True:
-        checkin = store.next_pending_checkin()
-        await asyncio.sleep(_seconds_until(checkin["fire_at"]))
+        nxt = store.next_pending_checkin()
+        secs = _seconds_until(nxt["fire_at"]) if nxt else HEARTBEAT_POLL_SECONDS
+        await asyncio.sleep(min(secs, HEARTBEAT_POLL_SECONDS))
+
+        nxt = store.next_pending_checkin()
+        if nxt is None or _seconds_until(nxt["fire_at"]) > 0:
+            continue
+
         async with lock:
             try:
-                await handle_checkin(store, agent, gate, send, checkin)
+                await handle_checkin(store, agent, gate, send, nxt)
                 await _maybe_reflect(store)
             except Exception:
                 logger.exception("Heartbeat turn failed; loop continues")
