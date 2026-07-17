@@ -33,12 +33,6 @@ MAX_TOKENS = 2048
 MAX_TOOL_ROUNDS = 4  # safety cap so a tool loop can't spin forever
 SILENT = "[silent]"
 
-# A stable key so every turn routes to the same prompt cache. The persona and
-# tool schemas lead the request unchanged, so their tokens are served from cache
-# (cheaper input) while quality is untouched — the model still sees the full
-# prompt. Only the trailing time/memory/history differ per turn.
-PROMPT_CACHE_KEY = "ruchi-agent-v1"
-
 PROACTIVE_INSTRUCTION = (
     "This is a self-initiated check-in — the user has not just messaged you. "
     'You earlier planned to reach out for this reason: "{reason}". '
@@ -68,7 +62,8 @@ class Agent:
         convo_gap_minutes, last_sender = self._convo_gap()
         self.store.save_message("user", user_message)
         text = await self._run(user_message, convo_gap_minutes=convo_gap_minutes, last_sender=last_sender)
-        self.store.save_message("assistant", text)
+        if text:
+            self.store.save_message("assistant", text)
         logger.info("Replied with %d chars", len(text))
         return text
 
@@ -100,8 +95,14 @@ class Agent:
         last_sender: str | None = None,
     ) -> str:
         self.outbox.drain()  # clear any media left by a prior turn
-        system = prompt.render(build_memory_context(self.store, trigger), convo_gap_minutes, last_sender)
-        messages: list[dict] = [{"role": "system", "content": system}]
+        # Two-message split: static persona first (OpenAI caches this prefix),
+        # then dynamic context (time/memory/gap) which is tiny and changes per turn.
+        messages: list[dict] = [
+            {"role": "system", "content": prompt.render_persona()},
+            {"role": "system", "content": prompt.render_context(
+                build_memory_context(self.store, trigger), convo_gap_minutes, last_sender
+            )},
+        ]
         messages += [
             {"role": row["role"], "content": row["content"]}
             for row in self.store.recent_messages(HISTORY_WINDOW)
@@ -115,7 +116,6 @@ class Agent:
                 max_completion_tokens=MAX_TOKENS,
                 tools=self.tools.schemas(),
                 messages=messages,
-                prompt_cache_key=PROMPT_CACHE_KEY,
             )
             if response.usage:
                 details = getattr(response.usage, "prompt_tokens_details", None)

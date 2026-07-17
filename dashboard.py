@@ -84,6 +84,44 @@ def api_schedule():
     return jsonify([dict(r) for r in store.recent_schedule(30)])
 
 
+@app.route("/api/brain")
+@reads_db
+def api_brain():
+    recently_recalled = store.conn.execute(
+        "SELECT text, kind, importance, ts, last_recalled FROM memories "
+        "WHERE last_recalled > datetime('now', '-24 hours') "
+        "ORDER BY last_recalled DESC LIMIT 20"
+    ).fetchall()
+    try:
+        from agent.prompt import render_persona, render_context
+        persona = render_persona()
+        context = render_context()
+    except Exception as e:
+        persona = f"[could not render: {e}]"
+        context = ""
+    return jsonify({
+        "recently_recalled": [dict(r) for r in recently_recalled],
+        "persona_preview": persona[:2000],
+        "context_preview": context,
+        "persona_chars": len(persona),
+        "context_chars": len(context),
+    })
+
+
+@app.route("/api/profile")
+@reads_db
+def api_profile():
+    facts = store.active_facts()
+    top_memories = store.conn.execute(
+        "SELECT text, kind, importance, ts FROM memories "
+        "ORDER BY importance DESC, ts DESC LIMIT 20"
+    ).fetchall()
+    return jsonify({
+        "facts": [dict(f) for f in facts],
+        "top_memories": [dict(m) for m in top_memories],
+    })
+
+
 @app.route("/api/tokens")
 @reads_db
 def api_tokens():

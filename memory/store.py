@@ -74,13 +74,15 @@ class Store:
         self.conn.commit()
 
     def _migrate(self) -> None:
-        try:
-            self.conn.execute(
-                "ALTER TABLE schedule ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0"
-            )
-            self.conn.commit()
-        except sqlite3.OperationalError:
-            pass  # column already exists
+        for ddl in [
+            "ALTER TABLE schedule ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE schedule ADD COLUMN gate_declines INTEGER NOT NULL DEFAULT 0",
+        ]:
+            try:
+                self.conn.execute(ddl)
+                self.conn.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def save_message(self, role: str, content: str, kind: str = "text") -> None:
         self.conn.execute(
@@ -215,6 +217,17 @@ class Store:
             "UPDATE schedule SET fire_at = ? WHERE id = ?", (fire_at, checkin_id)
         )
         self.conn.commit()
+
+    def increment_gate_declines(self, checkin_id: int) -> int:
+        self.conn.execute(
+            "UPDATE schedule SET gate_declines = gate_declines + 1 WHERE id = ?",
+            (checkin_id,),
+        )
+        self.conn.commit()
+        row = self.conn.execute(
+            "SELECT gate_declines FROM schedule WHERE id = ?", (checkin_id,)
+        ).fetchone()
+        return row["gate_declines"] if row else 0
 
     # --- Decisions: an audit trail of why she sent or stayed silent --------
 

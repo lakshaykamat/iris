@@ -140,7 +140,8 @@ def build_app(store: Store, lock: asyncio.Lock, post_init=None) -> Application:
             async with lock:
                 reply = await agent.reply(text)
                 media = agent.drain_media()
-            await send_human(app.bot, chat_id, reply)
+            if reply:
+                await send_human(app.bot, chat_id, reply)
             await deliver_media(app.bot, chat_id, media, store)
             logger.info(
                 "Turn done in %.1fs: %d bubbles, %d media item(s)",

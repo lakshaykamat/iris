@@ -476,6 +476,19 @@ body::after{
       <span class="ni-label">Token Costs</span>
       <span class="ni-count" id="nc-tok">—</span>
     </div>
+
+    <div class="nav-section-label" style="margin-top:14px;">brains</div>
+
+    <div class="nav-item" data-section="brain">
+      <span class="ni-icon">🫧</span>
+      <span class="ni-label">Her Brain</span>
+      <span class="ni-count" id="nc-brain">—</span>
+    </div>
+    <div class="nav-item" data-section="profile">
+      <span class="ni-icon">👤</span>
+      <span class="ni-label">Your Profile</span>
+      <span class="ni-count" id="nc-profile">—</span>
+    </div>
   </nav>
 
   <div class="sb-refresh">
@@ -654,6 +667,112 @@ body::after{
       </div>
     </div>
 
+  </div>
+
+  <!-- Her Brain -->
+  <div class="section" id="s-brain">
+    <div class="section-title">Her Brain</div>
+
+    <div class="two-col">
+      <!-- Recently recalled memories -->
+      <div class="card" style="border-top:2px solid var(--lav);">
+        <div class="card-head">
+          <span class="card-title">memories she accessed today</span>
+          <span class="card-badge" id="recalled-badge">—</span>
+        </div>
+        <div class="card-body">
+          <div class="sarea" style="max-height:52vh;">
+            <div class="mtl">
+              <div class="mtl-line"></div>
+              <div id="recalled-list"><div class="empty">no recalls in last 24h</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Context breakdown -->
+      <div>
+        <div class="card" style="border-top:2px solid var(--rose);margin-bottom:16px;">
+          <div class="card-head">
+            <span class="card-title">what's loaded in her head</span>
+            <span class="card-badge">context layers</span>
+          </div>
+          <div class="card-body" id="context-breakdown">
+            <div class="empty">loading…</div>
+          </div>
+        </div>
+
+        <div class="card" style="border-top:2px solid var(--gold);">
+          <div class="card-head">
+            <span class="card-title">live context block</span>
+            <span class="card-badge" id="ctx-size">—</span>
+          </div>
+          <div class="card-body">
+            <pre id="context-preview" style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);white-space:pre-wrap;line-height:1.65;margin:0;max-height:160px;overflow-y:auto;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Persona preview -->
+    <div class="card" style="border-top:1px solid var(--border);margin-top:4px;">
+      <div class="card-head">
+        <span class="card-title">her core instructions (persona sheet — cached)</span>
+        <span class="card-badge" id="persona-size">— chars</span>
+      </div>
+      <div class="card-body">
+        <div class="sarea" style="max-height:260px;">
+          <pre id="persona-preview" style="font-family:'JetBrains Mono',monospace;font-size:.58rem;color:rgba(232,224,213,.45);white-space:pre-wrap;line-height:1.65;margin:0;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Your Profile -->
+  <div class="section" id="s-profile">
+    <div class="section-title">What She Knows About You</div>
+
+    <!-- Summary strip -->
+    <div class="card" style="border-top:2px solid var(--gold);margin-bottom:16px;">
+      <div class="card-head">
+        <span class="card-title">your profile in her mind</span>
+        <span class="card-badge" id="profile-badge">— data points</span>
+      </div>
+      <div class="card-body" id="profile-header">
+        <div class="empty">loading…</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <!-- Facts -->
+      <div class="card" style="border-top:2px solid var(--teal);">
+        <div class="card-head">
+          <span class="card-title">things she's certain about you</span>
+          <span class="card-badge" id="pfact-badge">—</span>
+        </div>
+        <div class="card-body">
+          <div class="sarea" style="max-height:54vh;">
+            <div id="pfact-list"><div class="empty">no facts yet</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top memories by importance -->
+      <div class="card" style="border-top:2px solid var(--rose);">
+        <div class="card-head">
+          <span class="card-title">what matters most to her about you</span>
+          <span class="card-badge">by importance</span>
+        </div>
+        <div class="card-body">
+          <div class="sarea" style="max-height:54vh;">
+            <div class="mtl">
+              <div class="mtl-line"></div>
+              <div id="pimp-list"><div class="empty">no memories yet</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -918,6 +1037,134 @@ function renderTokens(data) {
   }).join('');
 }
 
+// ── Her Brain renderer ────────────────────────────────────────────────────
+
+function renderBrain(data) {
+  const { recently_recalled, persona_preview, context_preview, persona_chars, context_chars } = data;
+
+  // Nav count
+  document.getElementById('nc-brain').textContent = recently_recalled?.length ?? '—';
+
+  // Recalled memories
+  const rl = document.getElementById('recalled-list');
+  document.getElementById('recalled-badge').textContent = `${recently_recalled?.length ?? 0} today`;
+  if (!recently_recalled?.length) {
+    rl.innerHTML = '<div class="empty">no memory recalls in last 24h</div>';
+  } else {
+    rl.innerHTML = recently_recalled.map((m, i) => {
+      const pips = Array.from({length:10},(_,k)=>`<span class="pip${k<(m.importance||0)?' on':''}"></span>`).join('');
+      return `<div class="mem" style="animation-delay:${Math.min(i*.04,.5)}s">
+        <div class="mdot ${m.kind}"></div>
+        <div class="mtext">${esc(m.text)}</div>
+        <div class="mmeta2">
+          <span>recalled ${ago(m.last_recalled)}</span>
+          <span class="impbar">${pips}</span>
+          <span style="color:var(--lav);font-size:.58rem;">${m.importance}/10 importance</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Context breakdown bars
+  const cb = document.getElementById('context-breakdown');
+  const personaTok = Math.round(persona_chars / 4);
+  const contextTok = Math.round(context_chars / 4);
+  const total = Math.max(personaTok + contextTok, 1);
+  cb.innerHTML = `
+    <div style="margin-bottom:16px;">
+      <div class="model-name">
+        <span>persona sheet</span>
+        <span class="model-cost">~${fmtN(personaTok)} tokens</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(personaTok/total*100)}%;background:linear-gradient(90deg,var(--rose),var(--lav));"></div></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:.54rem;color:var(--dim);margin-top:3px;">${fmtN(persona_chars)} chars · static · <span style="color:var(--teal);">OpenAI caches this</span></div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div class="model-name">
+        <span>live context (time + memory)</span>
+        <span class="model-cost">~${fmtN(contextTok)} tokens</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(contextTok/total*100)}%;background:linear-gradient(90deg,var(--gold),var(--teal));"></div></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:.54rem;color:var(--dim);margin-top:3px;">${fmtN(context_chars)} chars · rebuilt every turn</div>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);border-top:1px solid var(--border);padding-top:10px;">
+      total context overhead · ~${fmtN(total)} tokens per turn
+    </div>`;
+
+  // Live context block
+  document.getElementById('ctx-size').textContent = `${fmtN(context_chars)} chars`;
+  document.getElementById('context-preview').textContent = context_preview || '';
+
+  // Persona preview
+  document.getElementById('persona-size').textContent = `${fmtN(persona_chars)} chars`;
+  document.getElementById('persona-preview').textContent = persona_preview || '';
+}
+
+// ── Your Profile renderer ─────────────────────────────────────────────────
+
+function renderProfile(data) {
+  const { facts, top_memories } = data;
+  const totalPoints = (facts?.length ?? 0) + (top_memories?.length ?? 0);
+
+  document.getElementById('nc-profile').textContent = totalPoints || '—';
+  document.getElementById('profile-badge').textContent = `${totalPoints} data points`;
+
+  // Summary header
+  const ph = document.getElementById('profile-header');
+  if (!facts?.length && !top_memories?.length) {
+    ph.innerHTML = '<div class="empty">Ruchi doesn\'t know much yet. Start chatting!</div>';
+  } else {
+    const maxImp = top_memories?.length ? Math.max(...top_memories.map(m=>m.importance||0)) : 0;
+    ph.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div class="sc" style="padding:14px 10px;">
+          <span class="v" style="color:var(--teal);">${facts?.length ?? 0}</span>
+          <span class="l">known facts</span>
+        </div>
+        <div class="sc" style="padding:14px 10px;">
+          <span class="v" style="color:var(--lav);">${top_memories?.length ?? 0}</span>
+          <span class="l">memories</span>
+        </div>
+        <div class="sc" style="padding:14px 10px;">
+          <span class="v" style="color:var(--gold);">${maxImp}/10</span>
+          <span class="l">peak importance</span>
+        </div>
+      </div>`;
+  }
+
+  // Facts list
+  const fl = document.getElementById('pfact-list');
+  document.getElementById('pfact-badge').textContent = `${facts?.length ?? 0} facts`;
+  if (!facts?.length) {
+    fl.innerHTML = '<div class="empty">no facts yet</div>';
+  } else {
+    fl.innerHTML = facts.map((f,i)=>`
+      <div class="fact-item" style="animation-delay:${i*.05}s;flex-direction:column;align-items:flex-start;gap:3px;">
+        <div style="color:var(--text);">${esc(f.text)}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.52rem;color:var(--dim);">#${f.id} · ${fmtTs(f.created_at)}</div>
+      </div>`).join('');
+  }
+
+  // Top memories by importance
+  const ml = document.getElementById('pimp-list');
+  if (!top_memories?.length) {
+    ml.innerHTML = '<div class="empty">no memories yet</div>';
+  } else {
+    ml.innerHTML = top_memories.map((m,i)=>{
+      const pips = Array.from({length:10},(_,k)=>`<span class="pip${k<(m.importance||0)?' on':''}"></span>`).join('');
+      return `<div class="mem" style="animation-delay:${Math.min(i*.04,.6)}s">
+        <div class="mdot ${m.kind||'event'}"></div>
+        <div class="mtext">${esc(m.text)}</div>
+        <div class="mmeta2">
+          <span>${fmtTs(m.ts)}</span>
+          <span class="impbar">${pips}</span>
+          <span style="color:var(--gold);font-weight:600;">${m.importance}/10</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
 // ── Nav tabs ──────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.nav-item').forEach(item=>{
@@ -936,7 +1183,7 @@ document.querySelectorAll('.nav-item').forEach(item=>{
 
 async function refresh() {
   try {
-    const [status, msgs, facts, mems, sched, decs, toks] = await Promise.all([
+    const [status, msgs, facts, mems, sched, decs, toks, brain, profile] = await Promise.all([
       fetch('/api/status').then(r=>r.json()),
       fetch('/api/messages?limit=40').then(r=>r.json()),
       fetch('/api/facts').then(r=>r.json()),
@@ -944,6 +1191,8 @@ async function refresh() {
       fetch('/api/schedule').then(r=>r.json()),
       fetch('/api/decisions').then(r=>r.json()),
       fetch('/api/tokens').then(r=>r.json()),
+      fetch('/api/brain').then(r=>r.json()),
+      fetch('/api/profile').then(r=>r.json()),
     ]);
 
     // Sidebar stats
@@ -968,6 +1217,8 @@ async function refresh() {
     renderSchedule(sched);
     renderDecisions(decs);
     renderTokens(toks);
+    renderBrain(brain);
+    renderProfile(profile);
 
     document.getElementById('last-ts').textContent =
       new Date().toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata',hour12:true});

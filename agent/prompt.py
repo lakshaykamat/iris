@@ -95,12 +95,46 @@ def build_system_prompt(
     return "\n".join(parts)
 
 
+def render_persona() -> str:
+    """Return the static persona — identical every call so OpenAI can cache it."""
+    return load_persona()
+
+
+def render_context(
+    memory_context: str = "",
+    convo_gap_minutes: int | None = None,
+    last_sender: str | None = None,
+) -> str:
+    """Return the per-turn dynamic context (time, memory, convo gap)."""
+    now = datetime.now(ZoneInfo(OWNER_TZ))
+    parts = [
+        "# Right now",
+        f"It is {now:%A, %d %B %Y, %I:%M %p} in {OWNER_TZ}.",
+        _what_shes_doing(now) + ".",
+    ]
+    if convo_gap_minutes is not None and convo_gap_minutes >= 30:
+        gap = _gap_str(convo_gap_minutes)
+        if last_sender == "assistant":
+            note = f"You texted him {gap} ago — he's only just replying now."
+        else:
+            note = f"He last texted {gap} ago and is texting you again now."
+        parts += [
+            "",
+            "# Conversation gap",
+            note,
+            "React the way you naturally would to this silence. Don't announce it, just let it colour your tone.",
+        ]
+    if memory_context.strip():
+        parts += ["", "# What you remember", memory_context.strip()]
+    return "\n".join(parts)
+
+
 def render(
     memory_context: str = "",
     convo_gap_minutes: int | None = None,
     last_sender: str | None = None,
 ) -> str:
-    """Render the current system prompt as it would be sent to the model."""
+    """Render the full system prompt (kept for CLI inspection: python -m agent.prompt)."""
     now = datetime.now(ZoneInfo(OWNER_TZ))
     return build_system_prompt(load_persona(), now, memory_context, convo_gap_minutes, last_sender)
 

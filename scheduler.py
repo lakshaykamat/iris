@@ -86,9 +86,14 @@ class ReachOutGate:
         recent = store.recent_messages(6)
         transcript = "\n".join(f"{m['role']}: {m['content']}" for m in recent)
         prompt = (
-            f"You planned to reach out because: {reason}\n\n"
+            f"You are a gate deciding whether to send a proactive message.\n"
+            f"Planned reason: {reason}\n\n"
             f"Recent conversation:\n{transcript or '(no messages yet)'}\n\n"
-            "Is now a natural moment to message them first? Answer yes or no."
+            "Send the message UNLESS one of these is true:\n"
+            "1. The user explicitly asked to not be disturbed or left alone.\n"
+            "2. A message on this exact topic was already sent in the last hour.\n"
+            "3. The conversation is actively ongoing right now.\n"
+            "Default to YES. Answer only yes or no."
         )
         response = await self.client.chat.completions.create(
             model=GATE_MODEL,
@@ -112,9 +117,16 @@ async def handle_checkin(store: Store, agent: Agent, gate: ReachOutGate, send, c
         return
 
     if not pinned and not await gate.should_reach_out(store, reason):
-        store.mark_checkin_done(checkin["id"])
-        store.log_decision("silent", f"gate declined; {reason}")
-        logger.info("Check-in skipped by gate: %s", reason)
+        declines = store.increment_gate_declines(checkin["id"])
+        if declines >= 3:
+            store.mark_checkin_done(checkin["id"])
+            store.log_decision("silent", f"gate declined {declines}x, giving up; {reason}")
+            logger.info("Check-in skipped by gate (final): %s", reason)
+        else:
+            retry_at = _format(_now() + timedelta(hours=2))
+            store.reschedule_checkin(checkin["id"], retry_at)
+            store.log_decision("gate_retry", f"gate declined ({declines}/3), retry in 2h; {reason}")
+            logger.info("Check-in gate declined (%d/3), rescheduled 2h: %s", declines, reason)
         return
 
     text = await agent.reach_out(reason)
@@ -188,8 +200,8 @@ async def _simulate(reason: str | None) -> None:
     agent = Agent(store)
     ensure_upcoming_checkin(store)
     checkin = store.next_pending_checkin()
-    if reason:
-        checkin = {"id": checkin["id"], "reason": reason}
+    if reason and checkin is not None:
+        checkin = {"id": checkin["id"], "reason": reason, "pinned": checkin["pinned"]}
 
     async def send(text: str, media) -> None:
         extras = "".join(f"\n{item.note}" for item in media)
