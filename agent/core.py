@@ -26,8 +26,10 @@ from memory.store import Store
 logger = logging.getLogger(__name__)
 
 # The persona caps output at 3 short Hinglish bubbles (~150 tokens real output).
-# 512 gives comfortable headroom without paying for tokens that will never be used.
-MAX_TOKENS = 512
+# gpt-5-mini uses internal reasoning tokens that count against max_completion_tokens,
+# so 512 was exhausted by reasoning before any text could be generated. 2048 gives
+# headroom for reasoning (~1500) + actual reply (~150) + tool calls if needed.
+MAX_TOKENS = 2048
 MAX_TOOL_ROUNDS = 4  # safety cap so a tool loop can't spin forever
 SILENT = "[silent]"
 
